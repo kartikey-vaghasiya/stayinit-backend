@@ -12,52 +12,53 @@ require('dotenv').config();
 async function login(req, res) {
 
     try {
+        // getting variables fron request
         const { email, password } = req.body;
 
+        // basic validation and missing fields check
         if (!(email && password)) {
-            return res.status(500).json({
+            return res.status(400).json({
                 "success": false,
-                "message": "email and password are required",
+                "message": "you did not provide email or password",
             })
         }
 
-        const user = await User.findOne({ email })
+        // user exists check
+        const userInDb = await User.findOne({ email })
 
-        if (!user) {
-            return res.status(500).json({
+        if (!userInDb) {
+            return res.status(404).json({
                 "success": false,
-                "message": "user not found with given email",
+                "message": "user is not registered with this email",
             })
         }
 
         // compare plain-password & salted-password
-        const isPasswordSame = await bcrypt.compare(password, user.password)
+        const isPasswordSame = await bcrypt.compare(password, userInDb.password)
 
         if (!isPasswordSame) {
-            return res.status(500).json({
+            return res.status(401).json({
                 "success": false,
                 "message": "password is incorrect",
             })
         }
 
-        const userProfile = await Profile.findOne({ userId: user._id })
-        if (!userProfile) {
-            return res.status(500).json({
-                "success": false,
-                "message": "user profile not found",
-            })
-        }
+        // getting user profile
+        const userProfile = await Profile.findOne({ userId: userInDb._id })
 
-        const token = jwt.sign({ "profile": userProfile }, process.env.JWT_SECRET, { expiresIn: '1h' })
+        // generate jwt token and send response
+        const token = jwt.sign({
+            _id: userProfile._id,
+            username: userProfile.username,
+            userId: userProfile.userId,
+        }, process.env.JWT_SECRET, { expiresIn: '1h' })
 
-        return res
-            .status(200)
-            .json({
-                "success": true,
-                "token": token,
-                "message": "user logged-in successfully",
-                "data": userProfile
-            })
+        return res.status(200).json({
+            "success": true,
+            "token": token,
+            "message": "you are logged in successfully",
+            "data": userProfile
+        })
 
     } catch (error) {
         res.status(500).json({
@@ -70,13 +71,14 @@ async function login(req, res) {
 async function isAuthenticate(req, res) {
 
     try {
-        const profile = req.user;
+        const profile = req.profile;
 
         res.status(200).json({
             "success": true,
-            "message": "user is authenticated",
+            "message": "authenticated successfully",
             "data": profile
         })
+
     } catch (error) {
         res.status(500).json({
             "success": false,
@@ -97,38 +99,44 @@ async function register(req, res) {
             confirmPassword
         } = req.body;
 
+        // check if all fields are provided
         if (!(username && email && password && confirmPassword)) {
-            return res.status(500).json({
+            return res.status(400).json({
                 "success": false,
                 "message": "all fields are required",
             })
         }
 
+        // check if password and confirm-password are same
         if (password !== confirmPassword) {
-            return res.status(500).json({
+            return res.status(401).json({
                 "success": false,
                 "message": "password and confirm-password are not same",
             })
         }
 
+        // check if password length is greater than 8
         if (password.length < 8) {
-            return res.status(500).json({
+            return res.status(400).json({
                 "success": false,
                 "message": "password length must be greater than 8",
             })
         }
 
-        const user = await User.findOne({ email })
+        // check if user already exists with given email 
+        const userInDb = await User.findOne({ email })
 
-        if (user) {
-            return res.json({
+        if (userInDb) {
+            return res.status(409).json({
                 "success": false,
                 "message": "user already exists with given email",
             });
         }
 
+        // hash password
         const hash = await bcrypt.hash(password, parseInt(process.env.SALT_ROUNDS))
 
+        // create new user and save it to db
         const newUser = new User({
             username,
             role,
@@ -137,22 +145,25 @@ async function register(req, res) {
             password: hash
         });
 
+
         await newUser.save();
 
+        // create new profile and save it to db
         const profile = new Profile({
             userId: newUser._id,
             username,
             comments: [],
-            wishlist: [],
+            likes: [],
         });
 
         await profile.save();
 
+        // update user with profile id
         newUser.profile = profile._id;
 
-        res.status(200).json({
+        res.status(201).json({
             "success": true,
-            "message": "user registered successfully",
+            "message": "you are registered successfully",
             "data": newUser
         });
 
@@ -167,31 +178,34 @@ async function register(req, res) {
 async function sendOTP(req, res) {
 
     try {
-
+        // getting variables fron request
         const { email } = req.body;
 
         if (!email) {
-            return res.status(500).json({
+            return res.status(400).json({
                 "success": false,
                 "message": "email is required",
             })
         }
 
+        // basic cheking and validation for email
         const emailInDB = await User.findOne({ email });
 
         if (emailInDB) {
-            return res.status(500).json({
+            return res.status(409).json({
                 "success": false,
-                "message": "user already exist with given email",
+                "message": "you are already registered with this email",
             })
         }
 
+        // basic cheking and validation for Otp
         const otpInDB = await Otp.findOne({ email }).sort({ createdAt: -1 }).limit(1);
+
         if (otpInDB) {
             await otpInDB.deleteOne()
         }
 
-        // generating otp...
+        // generating a new Otp
         let digits = '0123456789';
         let otp = '';
         for (let i = 0; i < 6; i++) {
@@ -205,9 +219,9 @@ async function sendOTP(req, res) {
 
         await newOTP.save();
 
-        return res.status(200).json({
+        return res.status(201).json({
             "success": true,
-            "message": "otp created successfully",
+            "message": "otp is created successfully",
             "data": newOTP
         })
     } catch (error) {
@@ -221,33 +235,37 @@ async function sendOTP(req, res) {
 async function verifyOTP(req, res) {
 
     try {
-
+        // getting variables fron request
         const { email, otp } = req.body;
 
-        if (!(email && otp)) {
-            return res.status(500).json({
+        // basic validation and missing fields check
+        if (!email || !otp) {
+            return res.status(400).json({
                 "success": false,
-                "message": "email and otp are required",
+                "message": "you did not provide email or otp",
             })
         }
 
-        const OTPinDB = await Otp.findOne({ email }).sort({ createdAt: -1 }).limit(1);
+        const OTPinDb = await Otp.findOne({ email }).sort({ createdAt: -1 }).limit(1);
 
-        if (!OTPinDB) {
-            return res.status(500).json({
+        // otp not found 
+        if (!OTPinDb) {
+            return res.status(404).json({
                 "success": false,
-                "message": "otp not found",
+                "message": "we don't have any otp for this email",
             })
         }
 
-        if (otp !== OTPinDB.otp) {
-            return res.status(500).json({
+        // incorrect otp check
+        if (otp !== OTPinDb.otp) {
+            return res.status(400).json({
                 "success": false,
-                "message": "incorrect otp",
+                "message": "either otp is incorrect or expired",
             })
         }
 
-        await Otp.findByIdAndDelete(OTPinDB._id)
+        // delete otp from db once it is verified
+        await Otp.findByIdAndDelete(OTPinDb._id)
 
         res.status(200).json({
             "success": true,
@@ -265,29 +283,35 @@ async function verifyOTP(req, res) {
 async function sendResetPasswordLink(req, res) {
 
     try {
+        // getting variables fron request
         const { email } = req.body;
 
-        const user = await User.findOne({ email });
-        if (!user) {
-            return res.status(500).json({
+        if (!email) {
+            return res.status(400).json({
                 "success": false,
-                "message": "user not found with given email",
+                "message": "email is required",
             })
         }
 
+        // basic cheking and validation for user 
+        const user = await User.findOne({ email });
+
+        if (!user) {
+            return res.status(404).json({
+                "success": false,
+                "message": "user is not registered with this email",
+            })
+        }
+
+        //finding and deleting previous reset password token then creating new one
         const token = await PasswordResetToken.findOne({ email });
+
         if (token) {
             await token.deleteOne();
         }
 
+        // generating a new reset password hash
         const resetPasswordHash = crypto.randomBytes(32).toString("hex");
-
-        if (!resetPasswordHash) {
-            return res.status(500).json({
-                "success": false,
-                "message": "reset password hash not found",
-            })
-        }
 
         const resetPasswordToken = new PasswordResetToken({
             email: email,
@@ -302,44 +326,61 @@ async function sendResetPasswordLink(req, res) {
         })
 
     } catch (error) {
+        // If an error occurs, return a 500 Internal Server Error status and the error message
         return res.status(500).json({
             "success": false,
             "message": error.message,
         })
     }
-
 }
 
 async function verifyResetPasswordLink(req, res) {
 
     try {
+        // getting variables fron request
         const { password, confirmPassword, token, email } = req.body;
 
-        const tokenInDB = await PasswordResetToken.findOne({ email, token })
-
-        if (!tokenInDB) {
-            return res.status(500).json({
+        // If password and confirmPassword are not provided, return a 400 Bad Request status
+        if (!(password && confirmPassword)) {
+            return res.status(400).json({
                 "success": false,
-                "message": "token not found",
+                "message": "password and confirm-password are required",
             })
         }
 
+        // validate reset password token
+        const tokenInDB = await PasswordResetToken.findOne({ email, token })
+
+        if (!tokenInDB) {
+            return res.status(404).json({
+                "success": false,
+                "message": "given token is not valid or expired",
+            })
+        }
+
+        // check if password and confirm-password are same
         if (password !== confirmPassword) {
-            return res.status(500).json({
+            return res.status(400).json({
                 "success": false,
                 "message": "password and confirm-password are not same",
             })
         }
 
+        // hash the new password and update the user
         const hashedPassword = await bcrypt.hash(password, parseInt(process.env.SALT_ROUNDS));
 
-        await User.findOneAndUpdate({ email }, { password: hashedPassword }, { new: true });
+        await User.findOneAndUpdate(
+            { email },
+            { password: hashedPassword },
+            { new: true }
+        );
 
+        // after password reset, delete the token from db
         await tokenInDB.deleteOne();
 
         res.status(200).json({
             "success": true,
-            "message": "password reset successfully",
+            "message": "your password is reset successfully",
         })
     } catch (error) {
         return res.status(500).json({

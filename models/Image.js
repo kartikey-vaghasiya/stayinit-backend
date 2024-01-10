@@ -6,7 +6,7 @@ const ImageSchema = new mongoose.Schema({
         required: true,
     },
 
-    flatOrHostelId: {
+    propertyId: {
         type: mongoose.Schema.Types.Mixed,
         required: true,
     },
@@ -16,4 +16,4 @@ const ImageSchema = new mongoose.Schema({
     }
 })
 
-module.exports = mongoose.model("Image", ImageSchema )
+module.exports = mongoose.model("Image", ImageSchema)

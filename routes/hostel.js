@@ -1,22 +1,22 @@
 const express = require("express")
 const router = express.Router()
+const authMiddlewere = require("../middlewares/auth")
 
 
-const { getHostel, getAllHostels, addHostel, updateHostel, deleteHostel, addPricingAndSharingDetails, addAminitiesDetails, addHostelImages } = require('../controllers/hostel')
+const { getHostel, getAllHostels, addHostel, updateHostel, deleteHostel, addPriceAndSharingDetails, addHostelImage } = require('../controllers/hostel')
 
-const AuthMiddlewere = require("../middleweres/auth")
 
-router.post("/", addHostel)
+router.post("/", authMiddlewere, addHostel)
 
 router.get("/", getAllHostels)
 router.get("/:id", getHostel)
 
-router.patch("/:id", updateHostel)
-router.delete("/:id", deleteHostel)
+router.patch("/:id", authMiddlewere, updateHostel)
+router.delete("/:id", authMiddlewere, deleteHostel)
 
-router.post("/pricing", addPricingAndSharingDetails)
+router.post("/price", authMiddlewere, addPriceAndSharingDetails)
 
-router.post("/hostel-image", addHostelImages)
+router.post("/hostel-image", authMiddlewere, addHostelImage)
 
 
 module.exports = router

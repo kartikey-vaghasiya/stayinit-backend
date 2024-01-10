@@ -1,22 +1,17 @@
 const express = require("express");
 const router = express.Router();
+const authMiddleware = require("../middlewares/auth.js");
 
 const {
-    createProfile,
     getOneProfile,
-    getAllProfiles,
     updateProfile,
-    deleteProfile
 } = require("../controllers/profile.js");
 
-// Profile - C - R - U - D 
-router.post('/', createProfile)
 
-router.get('/:userId', getOneProfile)
-router.get('/', getAllProfiles)
+router.get('/:profileId', getOneProfile)
 
-router.patch('/:userId', updateProfile)
-router.delete('/:userId', deleteProfile)
+router.patch('/', authMiddleware, updateProfile)
+
 
 
 module.exports = router;

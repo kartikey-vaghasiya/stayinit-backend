@@ -1,23 +1,42 @@
 const Flat = require("../models/Flat")
 const Image = require("../models/Image")
+const Profile = require("../models/Profile")
+const Comment = require("../models/Comment")
+const Like = require("../models/Like")
 
 async function getFlat(req, res) {
     try {
+
         const { id } = req.params
 
-        const data = await Flat.findById(id).populate("arrayOfImages")
-        try {
-            res.status(200).json({
-                "success": true,
-                "message": "flat fetched successfully",
-                "data": data
-            })
-        } catch (error) {
-            res.status(404).json({
+        if (!id) {
+            return res.status(400).json({
                 "success": false,
-                "error": error.message,
+                "message": "you must provide flat-id",
             })
         }
+
+        const flatInDb = await Flat.findById(id)
+            .populate("arrayOfImages likes")
+            .populate({
+                path: "comments",
+                populate: {
+                    path: "profile",
+                }
+            })
+
+        if (!flatInDb) {
+            return res.status(404).json({
+                "success": false,
+                "message": "your flat was not found",
+            })
+        }
+
+        res.status(200).json({
+            "success": true,
+            "message": "your flat was found",
+            "data": flatInDb
+        })
 
     } catch (error) {
         res.status(500).json({
@@ -25,17 +44,17 @@ async function getFlat(req, res) {
             "error": error.message,
         })
     }
-
 }
 
 async function getAllFlats(req, res) {
     try {
 
+        // getting filters and sorting options from request query 
+        // then creating queryObject
         const { bhk, furnitureType } = req.query
 
         const minPrice = req.query.minPrice || 0
         const maxPrice = req.query.maxPrice || Infinity
-
         const minSqft = req.query.minSqft || 0
         const maxSqft = req.query.maxSqft || Infinity
 
@@ -45,42 +64,33 @@ async function getAllFlats(req, res) {
         queryObj = {}
 
         if (bhk) {
-            queryObj.property_bhk = bhk
+            queryObj.bhk = bhk
         }
 
         if (furnitureType) {
             queryObj.furnitureType = furnitureType
         }
 
-        const data = await Flat.find(queryObj)
-            .populate("arrayOfImages")
+        // finding flats with the queryObject
+        const flatsInDb = await Flat.find(queryObj)
+            .populate("arrayOfImages comments likes")
             .sort(
-                sortByPrice ?
-                    {
-                        "property_price": sortByPrice
-                    }
-                    :
-                    sortBySqft ?
-                        {
-                            "property_sqft": sortBySqft
-                        }
-                        :
-                        null
+                sortByPrice ? { "price": sortByPrice } : sortBySqft ? { "sqft": sortBySqft } : null
             )
-            .where("property_price").gt(minPrice).lt(maxPrice)
-            .where("property_sqft").gt(minSqft).lt(maxSqft)
+            .where("price").gt(minPrice - 1).lt(maxPrice + 1)
+            .where("sqft").gt(minSqft - 1).lt(maxSqft + 1)
             .exec()
 
-        if (data.length > 0) {
+        if (flatsInDb.length > 0) {
             return res.status(200).json({
                 "success": true,
-                "message": "flat fetched successfully",
-                "data": data
+                "message": "your flats were fetched successfully",
+                "data": flatsInDb
             })
         } else {
             return res.status(404).json({
                 "success": false,
-                "error": "flat not found",
+                "error": "no flats found",
             })
         }
 
@@ -94,64 +104,33 @@ async function getAllFlats(req, res) {
 
 async function addFlat(req, res) {
     try {
+        // getting values from request
         const {
-            property_name,
-            property_price,
-            property_bhk,
-            property_sqft,
-            property_devloper,
-            property_locality,
-            property_city,
-            atWhichFloor,
-            totalFloor,
-            nearestLandmark,
-            description,
-            num_of_baths,
-            num_of_balconies,
-            furnitureType,
-            arrayOfImages,
-            locality_url,
-            address,
-            contactNum,
-            contactMail
+            type, name, price, bhk, sqft, furnitureType, address,
+            locality, city, pincode, addressLink, nearestLandmarks,
+            contactNumber, contactEmail, arrayOfImages, atWhichFloor,
+            totalFloor, description, bathrooms,
+            balconies, developer
         } = req.body
 
-        const flat = new Flat({
-            property_name,
-            property_price,
-            property_bhk,
-            property_sqft,
-            property_devloper,
-            property_locality,
-            property_city,
-            atWhichFloor,
-            totalFloor,
-            nearestLandmark,
-            description,
-            num_of_baths,
-            num_of_balconies,
-            furnitureType,
-            arrayOfImages,
-            locality_url,
-            address,
-            contactNum,
-            contactMail
+
+        const { _id: profile } = req.profile;
+
+        const newFlat = new Flat({
+            type, name, price, bhk, sqft, furnitureType,
+            address, locality, city, pincode, addressLink,
+            nearestLandmarks, contactNumber, contactEmail,
+            addedBy: profile, comments: [], likes: [], arrayOfImages: arrayOfImages || [], atWhichFloor,
+            totalFloor, description, bathrooms, balconies, developer,
         })
 
-        flat.save()
-            .then((Flat_data) => {
-                res.status(201).json({
-                    "success": true,
-                    "message": "flat added successfull",
-                    "data": Flat_data
-                })
-            })
-            .catch((error) => {
-                res.status(500).json({
-                    "success": false,
-                    "error": error.message,
-                })
-            })
+        await newFlat.save()
+
+        res.status(201).json({
+            "success": true,
+            "message": "flat added successfully",
+            "data": newFlat
+        })
     }
     catch (error) {
         res.status(500).json({
@@ -164,22 +143,43 @@ async function addFlat(req, res) {
 async function deleteFlat(req, res) {
     try {
         const { id } = req.params
+        const { _id: profile } = req.profile;
 
-        Flat.findByIdAndDelete(id)
-            .then((deletedFlat) => {
-                res.status(200).json({
-                    "success": true,
-                    "message": "flat deleted successfully",
-                    "data": deletedFlat
-                })
+        if (!id) {
+            return res.status(400).json({
+                "success": false,
+                "message": "flat-id is required",
             })
-            .catch((error) => {
-                res.status(404).json({
-                    "success": false,
-                    "error": error.message,
-                })
-            })
+        }
 
+        // then delete flat
+        const deletedFlat = await Flat.findOneAndDelete({ _id: id, addedBy: profile })
+
+        if (!deletedFlat) {
+            return res.status(404).json({
+                "success": false,
+                "message": "flat not found",
+            })
+        }
+
+        // delete comments, likes, images associated with the flat
+        await Comment.deleteMany({ flat: id })
+
+        await Like.deleteMany({ flat: id })
+
+        await Image.deleteMany({ flatOrHostelId: id })
+
+        // delete comments,likes in the user profile
+        await Profile.findOneAndUpdate(
+            { _id: profile },
+            { $pull: { likes: { flat: id }, comments: { flat: id } } },
+        )
+
+        res.status(200).json({
+            "success": true,
+            "message": "flat deleted successfully",
+            "data": deletedFlat
+        })
 
     } catch (error) {
         res.status(500).json({
@@ -193,21 +193,31 @@ async function updateFlat(req, res) {
     try {
         const { id } = req.params
 
-        Flat.findByIdAndUpdate(id, req.body, { new: true, runValidators: true })
-            .then((EditedFlat) => {
-                res.status(200).json({
-                    "success": true,
-                    "message": "flat updated successfully",
-                    "data": EditedFlat
-                })
+        if (!id) {
+            return res.status(400).json({
+                "success": false,
+                "message": "flat-id is required",
             })
-            .catch((error) => {
-                res.status(404).json({
-                    "success": false,
-                    "error": error.message,
-                })
-            })
+        }
 
+        const editedFlat = await Flat.findByIdAndUpdate(
+            id,
+            updationObject,
+            { new: true, runValidators: true }
+        )
+
+        if (!editedFlat) {
+            return res.status(404).json({
+                "success": false,
+                "message": "flat could not be updated",
+            })
+        }
+
+        res.status(200).json({
+            "success": true,
+            "message": "flat updated successfully",
+            "data": editedFlat
+        })
 
     } catch (error) {
         res.status(500).json({
@@ -217,41 +227,35 @@ async function updateFlat(req, res) {
     }
 }
 
-async function addFlatImages(req, res) {
+async function addFlatImage(req, res) {
     try {
-        const {
-            url,
-            flatOrHostelId,
-            tags,
-        } = req.body
+        // getting values from request
+        const { url, propertyId, tags } = req.body
 
+        const flatInDb = await Flat.findOne({ _id: propertyId })
 
-        let flatImages = new Image({
-            url,
-            flatOrHostelId,
-            tags,
-        })
-
-        const createdFlatImage = await flatImages.save()
-
-        if (createdFlatImage) {
-
-
-            const reletedFlat = await Flat.findOne({ _id: flatOrHostelId })
-            reletedFlat.arrayOfImages.push(createdFlatImage._id)
-            await reletedFlat.save()
-
-            res.status(201).json({
-                "success": true,
-                "message": "image added successfull",
-                "data": createdFlatImage
-            })
-        } else {
-            res.status(404).json({
+        if (!flatInDb) {
+            return res.status(404).json({
                 "success": false,
-                "message": "image not added",
+                "message": "we could not find the flat you are looking for",
             })
         }
+
+        // adding new image to the database
+        const newFlatImage = new Image({ url, propertyId, tags })
+        const createdFlatImage = await newFlatImage.save()
+
+        // updating the flat to which the image is to be added
+        await Flat.findOneAndUpdate(
+            { _id: propertyId },
+            { $push: { arrayOfImages: createdFlatImage._id } },
+        )
+
+        res.status(201).json({
+            "success": true,
+            "message": "your image has been added successfully",
+            "data": createdFlatImage
+        })
 
     } catch (error) {
         res.status(500).json({
@@ -267,5 +271,5 @@ module.exports = {
     addFlat,
     deleteFlat,
     updateFlat,
-    addFlatImages
+    addFlatImage
 }

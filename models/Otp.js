@@ -1,16 +1,25 @@
 const mongoose = require('mongoose')
-const { mailSender } = require('../config/nodemailer')
+const { mailSender } = require('../config/nodemailer');
+
+const {
+    emailValidator,
+} = require('../validator/modelValidator');
 
 const OtpSchema = new mongoose.Schema({
 
     email: {
         type: String,
         require: true,
+        validate: {
+            validator: emailValidator,
+            message: props => `${props.value} is not a valid email!`
+        }
     },
 
     otp: {
         type: String,
         require: true,
+        length: 6,
     },
 
     createdAt: {

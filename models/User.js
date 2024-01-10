@@ -1,16 +1,27 @@
-const mongoose = require('mongoose')
+const mongoose = require('mongoose');
+const {
+    emailValidator,
+    passwordValidator,
+    phoneNumberValidator,
+    usernameValidator,
+} = require('../validator/modelValidator');
 
 const userSchema = new mongoose.Schema({
 
     profile: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Profile",
+        unique: true,
     },
 
     username: {
         type: String,
         required: true,
         unique: true,
+        validate: {
+            validator: usernameValidator,
+            message: props => `${props.value} is not a valid username`
+        }
     },
 
     role: {
@@ -24,23 +35,27 @@ const userSchema = new mongoose.Schema({
         required: true,
         unique: true,
         validate: {
-            validator: function (email) {
-                const emailRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$/;
-                return emailRegex.test(email);
-            },
-
-            message: "Invalid Email"
+            validator: emailValidator,
+            message: props => `${props.value} is not a valid email!`
         },
     },
 
     phoneNumber: {
         type: String,
         unique: true,
+        validate: {
+            validator: phoneNumberValidator,
+            message: props => `${props.value} is not a valid contact number!`
+        },
     },
 
     password: {
         type: String,
         required: true,
+        validate: {
+            validator: passwordValidator,
+            message: props => `${props.value} is not a valid password!`
+        },
     },
 
 

@@ -1,19 +1,29 @@
 const mongoose = require("mongoose");
 const { resetPasswordMailSender } = require("../config/nodemailer");
+const {
+    emailValidator,
+} = require('../validator/modelValidator');
 
 const PasswordResetTokenSchema = new mongoose.Schema({
     email: {
         type: String,
         required: true,
-        unique: true
+        validate: {
+            validator: emailValidator,
+            message: props => `${props.value} is not a valid email!`
+        },
+        unique: true,
     },
+
     token: {
-        type: String
+        type: String,
+        required: true,
     },
+
     createdAt: {
         type: Date,
         default: Date.now(),
-        expires: 5 * 60 * 1000,
+        expires: 600,
     }
 });
 

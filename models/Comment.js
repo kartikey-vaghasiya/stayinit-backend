@@ -2,8 +2,15 @@ const mongoose = require('mongoose');
 
 const commentSchema = new mongoose.Schema({
 
+    type: {
+        type: String,
+        required: true,
+        enum: ['flat', 'hostel'],
+    },
+
     profile: {
         type: mongoose.Schema.Types.ObjectId,
+        required: true,
         ref: 'Profile'
     },
 
@@ -13,16 +20,9 @@ const commentSchema = new mongoose.Schema({
 
     rating: {
         type: Number,
-        default: 3,
+        required: true,
         min: 1,
         max: 5,
-        required: true
-    },
-
-    type: {
-        type: String,
-        enum: ['flat', 'hostel'],
-        required: true
     },
 
     flat: {
@@ -34,6 +34,7 @@ const commentSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Hostel'
     },
+
 }, { timestamps: true },
 );
 

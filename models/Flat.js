@@ -1,74 +1,148 @@
 const mongoose = require('mongoose')
 
+const {
+    emailValidator,
+    phoneNumberValidator,
+    linkValidator,
+    pincodeValidator,
+} = require('../validator/modelValidator');
+
+
 const Flatschema = new mongoose.Schema({
 
-    // uploaded_by:{
-    //     type: mongoose.Schema.Types.ObjectId,
-    //     ref: "User",
-    // },
+    // >>> mandatory fields
 
-    property_name: {
+    type: {
+        type: String,
+        default: "flat",
+        enum: ["flat"]
+    },
+
+    name: {
         type: String,
         required: true,
+        min: 3,
+        max: 20,
     },
 
-    property_price: {
+    price: {
         type: Number,
         required: true,
+        min: 1000,
     },
 
-    property_bhk: {
+    bhk: {
         type: Number,
         required: true,
+        min: 1,
+        max: 10,
     },
 
-    property_sqft: {
+    sqft: {
         type: Number,
-        required: true
-    },
-
-    property_devloper: {
-        type: String,
-    },
-
-    property_locality: {
-        type: String,
         required: true,
-    },
-
-    property_city: {
-        type: String,
-        required: true,
-    },
-
-    atWhichFloor: {
-        type: Number,
-    },
-
-    totalFloor: {
-        type: Number,
-    },
-
-    nearestLandmark: {
-        type: [String]
-    },
-
-    description: {
-        type: String,
-    },
-
-    num_of_baths: {
-        type: Number,
-    },
-
-    num_of_balconies: {
-        type: Number,
+        min: 100,
+        max: 10000,
     },
 
     furnitureType: {
         type: String,
-        enum: ["Furnished", "Unfurnished", "Semifurnished"],
+        enum: ["furnished", "unfurnished", "semifurnished"],
         required: true
+    },
+
+
+
+    // >>> Address Fields -- mandatory
+
+    address: {
+        type: String,
+        required: true,
+        trim: true,
+        min: 5,
+        max: 200,
+    },
+
+    locality: {
+        type: String,
+        required: true,
+        trim: true,
+        min: 3,
+        max: 50,
+    },
+
+    city: {
+        type: String,
+        required: true,
+        trim: true,
+        min: 3,
+        max: 20,
+    },
+
+    pincode: {
+        type: String,
+        required: true,
+        validate: {
+            validator: pincodeValidator,
+            message: props => `${props.value} is not a valid pincode!`
+        },
+    },
+
+    addressLink: {
+        type: String,
+        required: true,
+        trim: true,
+        min: 10,
+        max: 200,
+        validate: {
+            validator: linkValidator,
+            message: props => `${props.value} is not a valid url link!`
+        },
+    },
+
+    // >>> Address Fields -- optional
+
+    nearestLandmarks: {
+        type: [String]
+    },
+
+    // >>> Contact Fields -- mandatory
+    contactNumber: {
+        type: String,
+        required: true,
+        trim: true,
+        validate: {
+            validator: phoneNumberValidator,
+            message: props => `${props.value} is not a valid phone number!`
+        },
+    },
+
+    contactEmail: {
+        type: String,
+        required: true,
+        trim: true,
+        validate: {
+            validator: emailValidator,
+            message: props => `${props.value} is not a valid email!`
+        },
+    },
+
+    addedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Profile",
+        required: true
+    },
+
+    // >>> Optional Fields
+
+    comments: {
+        type: [mongoose.Schema.Types.ObjectId],
+        ref: "Comment",
+    },
+
+    likes: {
+        type: [mongoose.Schema.Types.ObjectId],
+        ref: "Like",
     },
 
     arrayOfImages: {
@@ -76,28 +150,46 @@ const Flatschema = new mongoose.Schema({
         ref: "Image"
     },
 
-    locality_url: {
-        type: String,
+    atWhichFloor: {
+        type: Number,
+        min: 0,
+        max: 50,
     },
 
-    contactNum: String,
-
-    contactMail: {
-        type: String,
-        required: true,
-        validate: {
-            validator: function (email) {
-                const emailRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$/;
-                return emailRegex.test(email);
-            },
-
-            message: "Invalid Email"
-        },
+    totalFloor: {
+        type: Number,
+        min: 0,
+        max: 50,
     },
 
-    address: String,
+    description: {
+        type: String,
+        trim: true,
+        min: 10,
+        max: 200,
+    },
 
+    bathrooms: {
+        type: Number,
+        min: 1,
+        max: 10,
+    },
+
+    balconies: {
+        type: Number,
+        min: 0,
+        max: 10,
+    },
+
+    devloper: {
+        type: String,
+        trim: true,
+        min: 3,
+        max: 20,
+    },
 
 }, { timestamps: true })
+
+
 
 module.exports = mongoose.model("Flat", Flatschema)

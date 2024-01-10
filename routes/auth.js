@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const authMiddlewere = require("../middleweres/auth")
+const authMiddlewere = require("../middlewares/auth")
 const {
     login,
     isAuthenticate,
@@ -12,6 +12,7 @@ const {
 } = require("../controllers/auth.js");
 
 // Auth - Routes
+
 router.post('/login', login)
 router.get('/is-authenticate', authMiddlewere, isAuthenticate)
 

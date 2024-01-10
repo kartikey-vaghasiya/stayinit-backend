@@ -7,6 +7,7 @@ const mongoSanitize = require('express-mongo-sanitize');
 const rateLimit = require('express-rate-limit');
 const xss = require('xss-clean');
 const cors = require("cors")
+const csurf = require('csurf');
 // >>> config packages
 require('dotenv').config();
 const connectDB = require("./config/database")
@@ -18,16 +19,16 @@ const FileRouter = require("./routes/file")
 const FlatRouter = require("./routes/flat")
 const HostelRouter = require("./routes/hostel")
 const ProfileRouter = require("./routes/profile")
-const WishlistRouter = require("./routes/wishlist")
-
+const LikesRouter = require("./routes/likes")
 
 
 // >>> security middlewares 
 app.use(cors("*"))
-app.set('trust proxy', 1);
 app.use(mongoSanitize());
 app.use(helmet());
 app.use(xss());
+// app.use(csurf({ cookie: true }));
+
 
 const limiter = rateLimit({
     max: 100000, // max requests
@@ -36,6 +37,7 @@ const limiter = rateLimit({
 });
 
 app.use(limiter);
+
 
 // >>> parser middlewares
 
@@ -53,9 +55,10 @@ app.use("/api/v1/auth", AuthRouter)
 app.use("/api/v1/profile", ProfileRouter)
 app.use("/api/v1/flat", FlatRouter)
 app.use("/api/v1/hostel", HostelRouter)
-app.use("/api/v1/wishlist", WishlistRouter)
+app.use("/api/v1/likes", LikesRouter)
 app.use("/api/v1/comment", CommentRouter)
 app.use("/api/v1/file", FileRouter)
+
 
 
 // >>> starting and connecting with server and db

@@ -1,121 +1,32 @@
 const Profile = require("../models/Profile");
 const User = require("../models/User");
 
-const createProfile = async (req, res) => {
-
-    try {
-        const {
-            userId,
-            firstname,
-            lastname,
-            username,
-            profilePicture,
-        } = req.body;
-
-        if (!userId) {
-            return res.status(500).json({
-                "success": false,
-                "message": "userId is required",
-            });
-        }
-
-        const userData = await User.findById(userId);
-        if (!userData) {
-            return res.status(500).json({
-                "success": false,
-                "message": "user not found with given userId",
-            });
-        }
-
-        const isProfileAlreadyExist = await Profile.findOne({ userId });
-        if (isProfileAlreadyExist) {
-            return res.status(500).json({
-                "success": false,
-                "message": "profile already exist with given userId",
-            });
-        }
-
-        const usernameForProfile = username || userData.username;
-
-        const createProfile = new Profile({
-            userId,
-            firstname,
-            lastname,
-            "username": usernameForProfile,
-            profilePicture,
-            comments: [],
-            wishlist: [],
-        });
-
-        await createProfile.save();
-
-        await User.findOneAndUpdate({ _id: userId }, { profile: createProfile._id }, { new: true });
-
-        res.status(201).json({
-            "success": true,
-            "message": "profile created successfully",
-            "data": createProfile,
-        });
-
-    } catch (error) {
-        res.status(500).json({
-            "success": false,
-            "message": error.message,
-        });
-    }
-}
-
 const getOneProfile = async (req, res) => {
     try {
-        const {
-            userId
-        } = req.params;
+        // getting profileId from request params
+        const { profileId } = req.params;
 
-        if (!userId) {
-            return res.status(500).json({
+        // missing variable check
+        if (!profileId) {
+            return res.status(400).json({
                 "success": false,
-                "message": "userId is required",
+                "message": "you did not provide profileId in params",
             });
         }
 
-        const profile = await Profile.findOne({ userId });
-
-        if (!profile) {
-            return res.status(500).json({
+        // getting profile from database and returning response
+        const profileInDb = await Profile.findById(profileId);
+        if (!profileInDb) {
+            return res.status(404).json({
                 "success": false,
-                "message": "profile not found with given userId",
+                "message": "we don't have any profile with this profileId",
             });
         }
 
         res.status(200).json({
             "success": true,
             "message": "profile found successfully",
-            "data": profile,
-        });
-
-    } catch (error) {
-        res.status(500).json({
-            "success": false,
-            "message": error.message,
-        });
-    }
-}
-
-const getAllProfiles = async (req, res) => {
-    try {
-
-        const { userId, username } = req.query;
-        const queryObject = {};
-
-        userId ? queryObject.userId = userId : null;
-        username ? queryObject.username = username : null;
-
-        const profiles = await Profile.find(queryObject);
-
-        res.status(200).json({
-            "success": true,
-            "message": "profiles found successfully",
-            "data": profiles,
+            "data": profileInDb,
         });
 
     } catch (error) {
@@ -128,31 +39,34 @@ const getAllProfiles = async (req, res) => {
 
 const updateProfile = async (req, res) => {
     try {
+        // getting data from request
+        const { _id: profile } = req.profile;
+
         const {
-            userId
-        } = req.params;
+            username,
+            firstname,
+            lastname,
+            profilePiture
+        } = req.body;
 
-        if (!userId) {
-            return res.status(500).json({
-                "success": false,
-                "message": "userId is required",
-            });
+
+        // updating the profile
+        const updatedProfile = await Profile.findOneAndUpdate(
+            { _id: profile },
+            req.body,
+            { new: true }
+        )
+
+        if (username) {
+            await User.findOneAndUpdate(
+                { profile: profile },
+                { username: username },
+                { new: true });
         }
-
-        const profile = await Profile.findOne({ userId });
-
-        if (!profile) {
-            return res.status(500).json({
-                "success": false,
-                "message": "profile not found with given userId",
-            });
-        }
-
-        const updatedProfile = await Profile.findOneAndUpdate({ userId }, req.body, { new: true });
 
         res.status(200).json({
             "success": true,
-            "message": "profile updated successfully",
+            "message": "your profile has been updated successfully",
             "data": updatedProfile,
         });
 
@@ -164,48 +78,8 @@ const updateProfile = async (req, res) => {
     }
 }
 
-const deleteProfile = async (req, res) => {
-    try {
-        const {
-            userId
-        } = req.params;
-
-        if (!userId) {
-            return res.status(500).json({
-                "success": false,
-                "message": "userId is required",
-            });
-        }
-
-        const profile = await Profile.findOne({ userId });
-
-        if (!profile) {
-            return res.status(500).json({
-                "success": false,
-                "message": "profile not found with given userId",
-            });
-        }
-
-        const deletedProfile = await Profile.findOneAndDelete({ userId });
-
-        res.status(200).json({
-            "success": true,
-            "message": "profile deleted successfully",
-            "data": deleteProfile,
-        });
-
-    } catch (error) {
-        res.status(500).json({
-            "success": false,
-            "message": error.message,
-        });
-    }
-}
 
 module.exports = {
-    createProfile,
     getOneProfile,
-    getAllProfiles,
     updateProfile,
-    deleteProfile
 }

@@ -1,41 +1,48 @@
 const Hostel = require("../models/Hostel")
-const PricingAndSharing = require("../models/PricingAndSharing")
+const PriceAndSharing = require("../models/PriceAndSharing")
 const Image = require("../models/Image")
 
 async function getHostel(req, res) {
     try {
         const { id } = req.params
 
-        const data = await Hostel.findById(id).populate('pricingAndSharing').populate('arrayOfImages')
-
-
-        if (data) {
-            return res.status(200).json({
-                "success": true,
-                "message": "get hostel successfull",
-                "data": data
+        const hostelInDb = await Hostel.findById(id)
+            .populate('priceAndSharing comments likes arrayOfImages')
+            .populate({
+                path: "comments",
+                populate: {
+                    path: "profile",
+                }
             })
-        } else {
+            .exec()
+
+        if (!hostelInDb) {
             return res.status(404).json({
                 "success": false,
-                "error": "hostel not foun",
-                "data": data
+                "message": "hostel not found",
             })
         }
 
+        res.status(200).json({
+            "success": true,
+            "message": "get hostel successful",
+            "data": hostelInDb
+        })
+
     } catch (error) {
+        // If an error occurs, return a 500 Internal Server Error status and the error message
         res.status(500).json({
             "success": false,
-            "error": error.message,
+            "message": error.message,
         })
     }
-
 }
 
 async function getAllHostels(req, res) {
     try {
+        // getting various filters and sorting options from request query
         const {
-            gender,
+            forWhichGender,
             liftFacility,
             wifiFacility,
             gymFacility,
@@ -46,92 +53,37 @@ async function getAllHostels(req, res) {
             filterWater,
             cctv,
             cleaning,
+            sortByPrice,
+            minPrice = 0,
+            maxPrice = Infinity
         } = req.query
 
-        const sortByPrice = req.query.sortByPrice;
-        const minPrice = req.query.minPrice || 0
-        const maxPrice = req.query.maxPrice || Infinity
-
-        queryObj = {}
-        if (liftFacility) {
-            queryObj.liftFacility = liftFacility
-        }
-        if (wifiFacility) {
-            queryObj.wifiFacility = wifiFacility
-        }
-        if (gymFacility) {
-            queryObj.gymFacility = gymFacility
-        }
-        if (acFacility) {
-            queryObj.acFacility = acFacility
-        }
-        if (gamingRoom) {
-            queryObj.gamingRoom = gamingRoom
-        }
-        if (freeLaundry) {
-            queryObj.freeLaundry = freeLaundry
-        }
-        if (securityGuard) {
-            queryObj.securityGuard = securityGuard
-        }
-        if (filterWater) {
-            queryObj.filterWater = filterWater
-        }
-        if (cctv) {
-            queryObj.cctv = cctv
-        }
-        if (cleaning) {
-            queryObj.cleaning = cleaning
-        }
-        if (gender) {
-            queryObj.forWhichGender = gender
+        const queryObj = {
+            ...(liftFacility && { liftFacility }),
+            ...(wifiFacility && { wifiFacility }),
+            ...(gymFacility && { gymFacility }),
+            ...(acFacility && { acFacility }),
+            ...(gamingRoom && { gamingRoom }),
+            ...(freeLaundry && { freeLaundry }),
+            ...(securityGuard && { securityGuard }),
+            ...(filterWater && { filterWater }),
+            ...(cctv && { cctv }),
+            ...(cleaning && { cleaning }),
+            ...(forWhichGender && { forWhichGender })
         }
 
-        const data = await Hostel.find(queryObj)
-            .populate('pricingAndSharing')
-            .populate('arrayOfImages')
-            .exec()
+        const hostelsInDb = await Hostel.find(queryObj).populate('priceAndSharing comments likes arrayOfImages').exec()
 
-        const filteredData = data.filter((hostel) => {
-
-            const pricingAndSharingArray = hostel.pricingAndSharing;
-
-            const minPriceLocal = pricingAndSharingArray.reduce((acc, curr) => {
-                return (
-                    Math.min(curr.price, acc)
-                )
-            }, Infinity)
-            const maxPriceLocal = pricingAndSharingArray.reduce((acc, curr) => {
-                return (
-                    Math.max(curr.price, acc)
-                )
-            }, 0)
-
+        // Filter hostels by price and then sort them
+        const filteredData = hostelsInDb.filter((hostel) => {
+            const priceAndSharingArray = hostel.priceAndSharing
+            const minPriceLocal = priceAndSharingArray.reduce((acc, curr) => Math.min(curr.price, acc), Infinity)
+            const maxPriceLocal = priceAndSharingArray.reduce((acc, curr) => Math.max(curr.price, acc), 0)
             return (minPrice <= maxPriceLocal && maxPrice >= minPriceLocal)
-
         }).sort((hostelA, hostelB) => {
-
-            const pricingAndSharingArrayA = hostelA.pricingAndSharing;
-
-            const minPriceLocalA = pricingAndSharingArrayA.reduce((acc, curr) => {
-                return (
-                    Math.min(curr.price, acc)
-                )
-            }, Infinity)
-
-            const pricingAndSharingArrayB = hostelB.pricingAndSharing;
-
-            const minPriceLocalB = pricingAndSharingArrayB.reduce((acc, curr) => {
-                return (
-                    Math.min(curr.price, acc)
-                )
-            }, Infinity)
-
-            if (sortByPrice == 1) {
-                return (minPriceLocalA - minPriceLocalB)
-            } else {
-                return (minPriceLocalB - minPriceLocalA)
-            }
+            const minPriceLocalA = hostelA.priceAndSharing.reduce((acc, curr) => Math.min(curr.price, acc), Infinity)
+            const minPriceLocalB = hostelB.priceAndSharing.reduce((acc, curr) => Math.min(curr.price, acc), Infinity)
+            return sortByPrice == 1 ? minPriceLocalA - minPriceLocalB : minPriceLocalB - minPriceLocalA
         })
 
         if (filteredData.length > 0) {
@@ -143,26 +95,33 @@ async function getAllHostels(req, res) {
         } else {
             return res.status(404).json({
                 "success": false,
-                "error": "hostels not found",
+                "message": "hostels not found",
             })
         }
     } catch (error) {
         res.status(500).json({
             "success": false,
-            "error": error.message,
+            "message": error.message,
         })
     }
 }
 
 async function addHostel(req, res) {
     try {
-        const {
-            hostel_name,
-            pricingAndSharing,
-            arrayOfImages,
+        const { // addedBy, likes, comments are by default added to [] in the model
+            name,
+            priceAndSharing,
+            forWhichGender,
+            addressLink,
+            address,
             locality,
             city,
-            forWhichGender,
+            pincode,
+            nearestLandmarks,
+            contactNumber,
+            contactEmail,
+            arrayOfImages,
+            description,
             liftFacility,
             wifiFacility,
             gymFacility,
@@ -173,20 +132,29 @@ async function addHostel(req, res) {
             filterWater,
             cctv,
             cleaning,
-            description,
-            contactNum,
-            contactMail,
-            address,
-            nearestLandmarks
+
         } = req.body
 
-        const hostel = new Hostel({
-            hostel_name,
-            pricingAndSharing,
-            arrayOfImages,
+        const { _id: profile } = req.profile;
+
+        const newHostel = new Hostel({
+            name,
+            priceAndSharing,
+            address,
+            forWhichGender,
+            addressLink,
+            address,
             locality,
             city,
-            forWhichGender,
+            pincode,
+            contactNumber,
+            contactEmail,
+            addedBy: profile, // default
+            nearestLandmarks: nearestLandmarks || [], // default
+            comments: [], // default
+            likes: [], // default
+            arrayOfImages: arrayOfImages || [], // default
+            description,
             liftFacility,
             wifiFacility,
             gymFacility,
@@ -197,111 +165,49 @@ async function addHostel(req, res) {
             filterWater,
             cctv,
             cleaning,
-            description,
-            contactNum,
-            contactMail,
-            address,
-            nearestLandmarks
+
         })
 
-        const hostelData = await hostel.save()
+        const createdHostel = await newHostel.save()
 
-        res.status(201).json({
-            "success": true,
-            "message": "hostel added successfully",
-            "data": hostelData
-        })
-    }
-
-    catch (error) {
+        if (createdHostel) {
+            return res.status(201).json({
+                "success": true,
+                "message": "hostel added successfully",
+                "data": createdHostel
+            })
+        } else {
+            return res.status(400).json({
+                "success": false,
+                "message": "hostel not added",
+            })
+        }
+    } catch (error) {
         res.status(500).json({
             "success": false,
-            "error": error.message,
+            "message": error.message,
         })
     }
-
 }
 
 async function deleteHostel(req, res) {
     try {
         const { id } = req.params
 
-        Hostel.findByIdAndDelete(id)
-            .then((deletedHostel) => {
-                return res.status(200).json({
-                    "success": true,
-                    "message": "hostel deleted successfully",
-                    "data": deletedHostel
-                })
+        const deletedHostel = await Hostel.findByIdAndDelete(id)
+
+        if (deletedHostel) {
+            return res.status(200).json({
+                "success": true,
+                "message": "hostel deleted successfully",
+                "data": deletedHostel
             })
-            .catch((error) => {
-                return res.status(404).json({
-                    "success": false,
-                    "error": error.message,
-                })
+        } else {
+            return res.status(404).json({
+                "success": false,
+                "message": "hostel not found",
             })
-
-
-    } catch (error) {
-        res.status(500).json({
-            "success": false,
-            "error": error.message,
-        })
-    }
-}
-
-async function updateHostel(req, res) {
-    try {
-        const { id } = req.params
-
-        Hostel.findByIdAndUpdate(id, req.body, { new: true, runValidators: true })
-            .then((EditedHostel) => {
-                return res.status(200).json({
-                    "success": true,
-                    "message": "hostel updated successfully",
-                    "data": EditedHostel
-                })
-            })
-            .catch((error) => {
-                return res.status(404).json({
-                    "success": false,
-                    "error": error.message,
-                })
-            })
-
-
-    } catch (error) {
-        res.status(500).json({
-            "success": false,
-            "error": error.message,
-        })
-    }
-}
-
-async function addPricingAndSharingDetails(req, res) {
-    try {
-        const { hostel, sharing, price } = req.body
-
-        const pricing = new PricingAndSharing({
-            "hostel": hostel,
-            "sharing": sharing,
-            "price": price,
-        })
-
-        const createdPricing = await pricing.save()
-
-        if (hostel) {
-            const reletedHostel = await Hostel.findOne({ _id: hostel })
-            reletedHostel.pricingAndSharing.push(pricing._id)
-            await reletedHostel.save()
         }
-
-        res.status(200).json({
-            "success": true,
-            "message": "pricing and sharing added successfull",
-            "data": createdPricing
-        })
-
 
     } catch (error) {
         res.status(500).json({
@@ -311,40 +217,105 @@ async function addPricingAndSharingDetails(req, res) {
     }
 }
 
-async function addHostelImages(req, res) {
+async function updateHostel(req, res) {
     try {
-        const {
-            url,
-            flatOrHostelId,
-            tags,
-        } = req.body
+        const { id } = req.params
 
-        let hostelImages = new Image({
-            url,
-            flatOrHostelId,
-            tags,
-        })
-
-        const createdHostelImage = await hostelImages.save()
-
-
-        if (createdHostelImage) {
-
-            const reletedHostel = await Hostel.findOne({ _id: flatOrHostelId })
-            reletedHostel.arrayOfImages.push(createdHostelImage._id)
-            await reletedHostel.save()
-
-            return res.status(201).json({
+        const updatedHostel = await Hostel.findByIdAndUpdate(id, req.body, { new: true, runValidators: true })
+        if (updatedHostel) {
+            return res.status(200).json({
                 "success": true,
-                "message": "hostel image added successfull",
-                "data": createdHostelImage
+                "message": "hostel updated successfully",
+                "data": updatedHostel
             })
         } else {
             return res.status(404).json({
                 "success": false,
-                "message": "hostel image not added",
+                "message": "hostel not found",
             })
         }
+
+    } catch (error) {
+        res.status(500).json({
+            "success": false,
+            "message": error.message,
+        })
+    }
+}
+
+async function addPriceAndSharingDetails(req, res) {
+    try {
+        const { hostel, sharing, price } = req.body
+
+        const hostelInDb = await Hostel.findOne({ _id: hostel })
+        if (!hostelInDb) {
+            return res.status(404).json({
+                "success": false,
+                "message": "hostel not found",
+            })
+        }
+
+        const pricing = new PriceAndSharing({
+            "hostel": hostel,
+            "sharing": sharing,
+            "price": price,
+        })
+
+        const createdPricing = await pricing.save()
+
+        await Hostel.findOneAndUpdate(
+            { _id: hostel },
+            { $push: { priceAndSharing: createdPricing._id } },
+        )
+
+        res.status(201).json({
+            "success": true,
+            "message": "price and sharing added successfully",
+            "data": createdPricing
+        })
+
+    } catch (error) {
+        res.status(500).json({
+            "success": false,
+            "message": error.message,
+        })
+    }
+}
+
+async function addHostelImage(req, res) {
+    try {
+
+        const { propertyId, url, tags } = req.body
+
+
+        const hostelInDb = await Hostel.findOne({ _id: propertyId })
+
+        if (!hostelInDb) {
+            return res.status(404).json({
+                "success": false,
+                "message": "hostel not found",
+            })
+        }
+
+        const newImage = new Image({
+            propertyId,
+            url,
+            tags: tags || [],
+        })
+
+        const createdImage = await newImage.save()
+
+        await Hostel.findOneAndUpdate(
+            { _id: propertyId },
+            { $push: { arrayOfImages: createdImage._id } },
+        )
+
+        res.status(201).json({
+            "success": true,
+            "message": "image added successfully",
+            "data": createdImage
+        })
+
 
     } catch (error) {
         res.status(500).json({
@@ -360,6 +331,6 @@ module.exports = {
     addHostel,
     deleteHostel,
     updateHostel,
-    addPricingAndSharingDetails,
-    addHostelImages,
+    addPriceAndSharingDetails,
+    addHostelImage,
 }
